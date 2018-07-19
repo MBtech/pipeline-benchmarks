@@ -11,7 +11,7 @@ val conf = new SparkConf().setAppName("Spark SQL basic example").set("spark.cass
 
 val spark = SparkSession.builder().config(conf).getOrCreate()
 import spark.implicits._
-val df_1 = spark.read.format("csv").option("header", "true").load("hdfs://"+args(0)+":9000/flights.csv")
+val df_1 = spark.read.format("csv").option("header", "true").load("hdfs://"+args(0)+":9000/flight.csv")
 val flightsFromTo = df_1.select($"Origin",$"Dest")
 val airportCodes = df_1.select($"Origin", $"Dest").flatMap(x => Iterable(x(0).toString, x(1).toString))
 val airportVertices: RDD[(VertexId, String)] = airportCodes.rdd.distinct().map(x => (MurmurHash3.stringHash(x), x))
@@ -28,11 +28,11 @@ val topRoutes = graph.triplets.sortBy(_.attr, ascending=false).map(triplet=>(tri
 topRoutes.take(10).foreach(println)
 topRoutes.write.format("org.apache.spark.sql.cassandra").options(Map("table"->"freqflights", "keyspace"->"test")).save()
 
-//graph.inDegrees.join(airportVertices).sortBy(_._2._1, ascending=false).take(1).foreach(println)
-//graph.outDegrees.join(airportVertices).sortBy(_._2._1, ascending=false).take(1).foreach(println)
-//val ranks = graph.pageRank(0.0001).vertices
-//val ranksAndAirports = ranks.join(airportVertices).sortBy(_._2._1, ascending=false).map(_._2._2)
-//ranksAndAirports.take(10).foreach(println)
+graph.inDegrees.join(airportVertices).sortBy(_._2._1, ascending=false).take(1).foreach(println)
+graph.outDegrees.join(airportVertices).sortBy(_._2._1, ascending=false).take(1).foreach(println)
+val ranks = graph.pageRank(0.0001).vertices
+val ranksAndAirports = ranks.join(airportVertices).sortBy(_._2._1, ascending=false).map(_._2._2)
+ranksAndAirports.take(10).foreach(println)
 
 }
 
