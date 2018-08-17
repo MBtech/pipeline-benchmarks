@@ -19,6 +19,7 @@
 
 import common.IOCommon
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.mllib.tree.RandomForest
 import org.apache.spark.mllib.tree.model.RandomForestModel
 import org.apache.spark.mllib.util.MLUtils
@@ -70,8 +71,12 @@ object RandomForestClassification {
   }
   
   def run(params: Params): Unit = {
-    val conf = new SparkConf().setAppName(s"RFC with $params")
-    val sc = new SparkContext(conf)
+    val conf = new SparkConf().setAppName("Spark SQL basic example").set("spark.cassandra.connection.host", "172.31.46.157")
+
+    //val conf = new SparkConf().setAppName(s"RFC with $params")
+    val spark = SparkSession.builder().config(conf).getOrCreate()
+    import spark.implicits._
+    val sc = spark.sparkContext
 
     // $example on$
     // Load and parse the data file.
@@ -94,9 +99,16 @@ object RandomForestClassification {
       val prediction = model.predict(point.features)
       (point.label, prediction)
     }
+    labelAndPreds.take(10).foreach(println)
     val testErr = labelAndPreds.filter(r => r._1 != r._2).count.toDouble / testData.count()
     println("Test Error = " + testErr)
 
-    sc.stop()
+    val p = labelAndPreds.zipWithIndex().map{point => (point._1._1, point._1._2, point._2)}
+    p.take(10).foreach(println)
+    val preds = p.toDF("label", "prediction", "id")
+    preds.take(10).foreach(println)
+    preds.write.format("org.apache.spark.sql.cassandra").options(Map("table"->"rf", "keyspace"->"test")).save()
+
+    spark.stop()
   }
 }

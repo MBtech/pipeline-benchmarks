@@ -13,28 +13,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-current_dir=`dirname "$0"`
-current_dir=`cd "$current_dir"; pwd`
-root_dir=${current_dir}/../../../../../
-workload_config=${root_dir}/conf/workloads/ml/rf.conf
-. "${root_dir}/bin/functions/load_bench_config.sh"
+source rf.conf
 
-enter_bench RandomForest ${workload_config} ${current_dir}
-show_bannar start
-
-rmr_hdfs $OUTPUT_HDFS || true
-
-SIZE=`dir_size $INPUT_HDFS`
-START_TIME=`timestamp`
+MEMORY=6G
+MASTER_IP=$HDFS_MASTER
+CASSANDRA_PRIV=172.31.46.157
+CASSANDRA_IP=172.31.46.157
 OPTION="--numTrees $NUM_TREES_RF \
         --numClasses $NUM_CLASSES_RF \
         --featureSubsetStrategy $FEATURE_SUBSET_STRATEGY_RF \
         --impurity $IMPURITY_RF \
         --maxDepth $MAX_DEPTH_RF \
         --maxBins $MAX_BINS_RF"
-run_spark_job com.intel.hibench.sparkbench.ml.RandomForestClassification $OPTION $INPUT_HDFS
-END_TIME=`timestamp`
+#run_spark_job com.intel.hibench.sparkbench.ml.RandomForestClassification $OPTION $INPUT_HDFS
 
-gen_report ${START_TIME} ${END_TIME} ${SIZE}
-show_bannar finish
-leave_bench
+ssh -t ubuntu@$CASSANDRA_IP "cqlsh $CASSANDRA_PRIV -e \"DROP TABLE IF EXISTS test.rf;\""
+ssh -t ubuntu@$CASSANDRA_IP "cqlsh $CASSANDRA_PRIV -e \"CREATE KEYSPACE IF NOT EXISTS test WITH REPLICATION = {'class' : 'SimpleStrategy','replication_factor' : 1};\""
+ssh -t ubuntu@$CASSANDRA_IP "cqlsh $CASSANDRA_PRIV -e \"CREATE TABLE IF NOT EXISTS test.rf (label float, prediction float, id bigint, PRIMARY KEY (id) );\""
+
+/usr/local/spark/bin/spark-submit --jars scopt_2.11-3.7.0.jar --executor-memory $MEMORY --packages com.datastax.spark:spark-cassandra-connector_2.11:2.3.0 --class RandomForestClassification --master spark://$MASTER_IP:7077 target/scala-2.11/simple-project_2.11-1.0.jar $OPTION $INPUT_HDFS
